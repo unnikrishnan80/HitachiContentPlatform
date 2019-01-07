@@ -1,0 +1,604 @@
+using System.Web;
+using System;
+using System.Configuration;
+using System.IO;
+using System.Text;
+using System.Net;
+using System.Net.Security;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+
+using NLog;
+
+namespace ReturnManagementSystem_Web.Utils
+{
+    public class HCPConnect
+    {
+        public string ErrorMessage = string.Empty;
+        public string ErrorCode = string.Empty;
+        public string url = ConfigurationManager.AppSettings["url"];
+
+        public string userNameEncrpyted = ConfigurationManager.AppSettings["UserName"];
+        public string passwordEncrpyted = ConfigurationManager.AppSettings["Password"];
+
+        public string FilePath = ConfigurationManager.AppSettings["FilePath"];
+        public string FileNamePOST = ConfigurationManager.AppSettings["FileNamePOST"];
+        public string FileNameGET = ConfigurationManager.AppSettings["FileNameGET"];
+
+        public string LogicSwitch = ConfigurationManager.AppSettings["LogicFlip"];
+
+        public string userName = string.Empty;
+        public string password = string.Empty;
+
+        Logger Nlogger = LogManager.GetCurrentClassLogger();
+
+        public HCPConnect()
+        {
+            if (userNameEncrpyted != null)
+            {
+                userName = CookieSecurityProvider_Data.Decrypt(userNameEncrpyted);
+            }
+            
+            if (passwordEncrpyted != null)
+            {
+                password = CookieSecurityProvider_Data.Decrypt(passwordEncrpyted);
+            }
+        }
+
+        public string DeleteFiles(string fileName)
+        {
+            string result = string.Empty;
+            try
+            {
+                //Nlogger.Trace(" Entered DeleteFiles");
+                CommonFunction.SaveExecutionLogger("HCPConnect", "DeleteFiles", "No SP", " Entered DeleteFiles");
+                if (string.IsNullOrEmpty(fileName))
+                {
+                    return "No files";
+                }
+
+                string urlDelete = url + "/" + fileName;
+                //Nlogger.Trace(" URL : " + urlDelete);
+                CommonFunction.SaveExecutionLogger("HCPConnect", "DeleteFiles", "No SP", " URL : " + urlDelete);
+
+                HttpStatusCode code;
+                string byte64_username = string.Empty;
+                string md5_password = string.Empty;
+
+                using (MD5 md5Hash = MD5.Create())
+                {
+                    md5_password = GetMd5Hash(md5Hash, password);
+                }
+                byte64_username = Get64Byte(userName);
+                //Nlogger.Trace(" MD5_password : " + md5_password);
+                //Nlogger.Trace(" Byte64_username : " + byte64_username);
+                //Nlogger.Trace(" Try to connect URL : " + urlDelete);
+                CommonFunction.SaveExecutionLogger("HCPConnect", "DeleteFiles", "No SP", " URL : " + md5_password);
+                CommonFunction.SaveExecutionLogger("HCPConnect", "DeleteFiles", "No SP", " URL : " + byte64_username);
+                CommonFunction.SaveExecutionLogger("HCPConnect", "DeleteFiles", "No SP", " URL : " + urlDelete);
+
+                WebRequest request = WebRequest.Create(urlDelete);
+                request.Method = "DELETE";
+                request.Headers.Add("Authorization", Convert.ToString("HCP ") + byte64_username + ":" + md5_password);
+
+                //Nlogger.Trace(" Call 'OverrideCertificateValidations' ");
+                CommonFunction.SaveExecutionLogger("HCPConnect", "DeleteFiles", "No SP", " Call 'OverrideCertificateValidations' ");
+                OverrideCertificateValidations();
+
+                HttpWebResponse response = (HttpWebResponse)request.GetResponse();
+                code = response.StatusCode;
+                //Nlogger.Trace(" Response code : " + response.StatusCode.ToString());
+                CommonFunction.SaveExecutionLogger("HCPConnect", "DeleteFiles", "No SP", " Response code : " + response.StatusCode.ToString());
+
+                if (code.ToString() == "200" || code.ToString() == "204")
+                {
+                    result = "OK";
+                }
+                return result;
+            }
+            catch (Exception exception)
+            {
+                //Nlogger.ErrorException("Error while delete : ", exception);
+                CommonFunction.SaveExecutionLogger("HCPConnect", "DeleteFiles", "No SP", "Error while delete : " + exception.Message);
+                return result = "Error : " + exception.Message;
+            }
+        }
+
+        public Tuple<byte[], string> DownloadFiles(string fileName)
+        {
+            byte[] bytes = null;
+            try
+            {
+                string byte64_username = string.Empty;
+                string md5_password = string.Empty;
+                
+                CommonFunction.SaveExecutionLogger("HCPConnect", "DownloadFiles", "No SP", "Entered DownloadFiles");
+                //string fullPath = LocalFolderPath + fileName; // "C:/DirectDocument" + "/2011-2012/11076/Events/OGEApplicationFiled_265711/Blank PDF_131882853580352172.pdf"
+                //string directoryPath = Path.GetDirectoryName(fullPath); // "C:/DirectDocument/2011-2012/11076/Events/OGEApplicationFiled_265711/"
+
+                if (string.IsNullOrEmpty(fileName))
+                {
+                    return Tuple.Create(bytes,"File name is empty");
+                }
+
+                //if (!Directory.Exists(FilePath))
+                //{
+                //    Nlogger.Trace("No such folder exist");
+                //    CommonFunction.SaveExecutionLogger("HCPConnect", "DownloadFiles", "No SP", "No such folder exist");
+                //    Directory.CreateDirectory(directoryPath);
+                //}
+                //else
+                //{
+                //    //if (File.Exists(localPath))
+                //    //{
+                //    //    Nlogger.Trace("Delete existing file");
+                //    //    File.Delete(localPath);
+                //    //}
+                //}
+
+                string URI = string.Empty;
+                if (fileName.Trim().StartsWith("/"))
+                {
+                    URI = url + fileName;
+                }
+                else
+                {
+                    URI = url + "/" + fileName;
+                }
+                 
+               
+                CommonFunction.SaveExecutionLogger("HCPConnect", "DownloadFiles", "No SP", "URI : " + URI);
+
+                using (MD5 md5Hash = MD5.Create())
+                {
+                    md5_password = GetMd5Hash(md5Hash, password);
+                }
+                byte64_username = Get64Byte(userName);
+               
+
+                CommonFunction.SaveExecutionLogger("HCPConnect", "DownloadFiles", "No SP", " Try to connect URL : " + URI);
+
+                // Construct HTTP request to get the logo
+                HttpWebRequest httpRequest = (HttpWebRequest)WebRequest.Create(URI);
+                httpRequest.Method = WebRequestMethods.Http.Get;
+                httpRequest.Headers.Add("Authorization", Convert.ToString("HCP ") + byte64_username + ":" + md5_password);
+
+                // X.509 certificate
+                Nlogger.Trace(" Lets call 'OverrideCertificateValidations' function ");
+                CommonFunction.SaveExecutionLogger("HCPConnect", "DownloadFiles", "No SP", " Lets call 'OverrideCertificateValidations' function ");
+                OverrideCertificateValidations();
+
+                // Get back the HTTP response for web server
+                HttpWebResponse httpResponse = (HttpWebResponse)httpRequest.GetResponse();
+
+                // Check response code
+                string responseCode = httpResponse.StatusCode.ToString();
+                CommonFunction.SaveExecutionLogger("HCPConnect", "DownloadFiles", "No SP", " Response Code : " + responseCode);
+
+                using (BinaryReader responseReader = new BinaryReader(httpResponse.GetResponseStream()))
+                {
+                    bytes = responseReader.ReadBytes((int)httpResponse.ContentLength);
+                    CommonFunction.SaveExecutionLogger("HCPConnect", "DownloadFiles", "No SP", " Using Binary, Content length : " + httpResponse.ContentLength.ToString());
+                    //using (BinaryWriter sw = new BinaryWriter(File.OpenWrite(directoryPath)))
+                    //{
+                    //    sw.Write(bytes);
+                    //    sw.Flush();
+                    //    sw.Close();
+                    //    CommonFunction.SaveExecutionLogger("HCPConnect", "DownloadFiles", "No SP", "BinaryWriter close");
+                    //}
+                }
+
+                CommonFunction.SaveExecutionLogger("HCPConnect", "DownloadFiles", "No SP", " Downloaded");
+                Nlogger.Trace(" Downloaded");
+                return Tuple.Create(bytes, "OK");
+            }
+            catch (Exception exception)
+            {
+                CommonFunction.SaveExecutionLogger("HCPConnect", "DownloadFiles", "No SP", "Error in DownloadFiles : "+ exception);
+                ErrorMessage = "Error Message" + exception.Message;
+                return Tuple.Create(bytes, ErrorMessage);
+            }
+        }
+
+        public string UploadFiles(HttpPostedFileBase file, string folderPath, string FileName="", string FileExtension = "", byte[] xmlContent = null, string events = null)
+        {
+            try
+            {
+                string urlUploadFile = string.Empty;
+                if (!string.IsNullOrEmpty(events))
+                {
+                    urlUploadFile = url + "/" + folderPath;
+                    CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles - " + events, "No SP", "Upload Files : Entered FolderPath : " + folderPath);
+                    CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles - " + events, "No SP", "Upload Files : Entered; FileName : " + FileName);
+                    CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles - " + events, "No SP", "Upload Files : URLUploaded : " + urlUploadFile);
+                }
+                else
+                {
+                    urlUploadFile = url + "/" + FileName;
+                    CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles", "UploadFiles : XML", "Upload Files : Entered : FolderPath : " + folderPath);
+                    CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles", "UploadFiles : XML", "Upload Files : Entered : FileName : " + FileName);
+                    CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles", "UploadFiles : XML", "Upload Files : URLUploaded : " + urlUploadFile);
+                }
+                
+                //Nlogger.Trace("Upload Files : Entered : UploadFiles method");
+
+                // Get location of URL and append file name
+                //var fileName = Path.GetFileName(file.FileName);
+                
+                
+
+                //Nlogger.Trace("Upload Files : URLUploaded : " + urlUploadFile);
+                //if (!File.Exists(FilePath + fileName))
+                //{
+                //    Nlogger.Trace("Upload Files : File not exist");
+                //    return "File not exist";
+                //}
+
+                //if(!string.IsNullOrEmpty(FileExtension))
+                //{
+                //    CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles", "No SP", "XML file need to upload");
+                //    string result = UploadFilesXML(file, urlUploadFile);
+                //    return result;
+                //}
+
+                int fileSize = file.ContentLength;
+                CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles : " + events, "No SP", "Upload Files :  FileContentLength : " + fileSize.ToString());
+
+                //// If file exists in HCP then we will delete and then upload it.
+                //string isFiledeleted = DeleteFiles("");
+                //CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles", "No SP", "Upload Files : File Deleted" + isFiledeleted);
+
+                //// Get the file information form the selected file
+                //FileInfo fileInfo = new FileInfo(fileName);
+                //CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles", "No SP", "Upload Files : FileName : " + fileName);
+                //Nlogger.Trace("Upload Files : FileName : " + fileName);
+
+                //// Get the length of the file to see if it is possible to upload it (with the standard 4 MB limit) 
+                //long numBytes = fileInfo.Length;
+                //double dLen = Convert.ToDouble(fileInfo.Length / 1000000);
+
+                //// Convert the file to a byte array
+                //byte[] Unni = new byte[fileSize];
+
+                Stream fileStream = file.InputStream;
+                BinaryReader binaryReader = new BinaryReader(fileStream);
+                byte[] data = binaryReader.ReadBytes(fileSize);
+
+                CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles : " + events, "No SP", "Upload Files :  File converted to byte array ");
+                //Nlogger.Trace("Upload Files :  FileContentLength : " + fileSize.ToString());
+
+                // Username and Password encryption
+                string byte64_username = string.Empty;
+                string md5_password = string.Empty;
+                CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles : " + events, "No SP", "Upload Files :  Before Encryption ");
+
+                //Nlogger.Trace("Upload Files :  Before Encryption ");
+                byte64_username = Get64Byte(userName);
+
+                using (MD5 md5Hash = MD5.Create())
+                {
+                    md5_password = GetMd5Hash(md5Hash, password);
+                }
+                CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles : " + events, "No SP", "Upload Files :  md5_password : " + md5_password);
+                CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles : " + events, "No SP", "Upload Files :  byte64_username : " + byte64_username);
+                //Nlogger.Trace("Upload Files :  md5_password : " + md5_password);
+                //Nlogger.Trace("Upload Files :  byte64_username : " + byte64_username);
+
+                // Web request
+                Nlogger.Trace(" Try to connect REST API : " + urlUploadFile);
+                CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles : " + events, "No SP", "Try to connect REST API : " + urlUploadFile);
+
+                HttpWebRequest request = (HttpWebRequest)WebRequest.Create(urlUploadFile);
+                request.Method = WebRequestMethods.Http.Put;
+                //request.ContentLength = numBytes;
+                request.SendChunked = true;
+
+                //// For events, we have to upload documents.
+                if(!string.IsNullOrEmpty(events))
+                {
+                    data = xmlContent;
+                    CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles : " + events, "No SP", "Events documents saved");
+                }
+
+                //// For xml files we have to write different logic
+                if (!string.IsNullOrEmpty(FileExtension))
+                {
+                    data = null;
+                    //CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles-XML", "No SP", "FileExtension XML");
+                    Stream fileStreamXml = file.InputStream;
+                    var mStreamer = new MemoryStream();
+                    mStreamer.SetLength(fileStreamXml.Length);
+                    fileStreamXml.Read(mStreamer.GetBuffer(), 0, (int)fileStreamXml.Length);
+                    mStreamer.Seek(0, SeekOrigin.Begin);
+                    data = mStreamer.GetBuffer();
+                    //CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles-XML", "No SP", "Memory Stream : XML File Size : " + data.Length);
+                    
+                    string xmlTypeSetting = ConfigurationManager.AppSettings["xmlContent"];
+                    if( xmlTypeSetting == "1")
+                    {
+                        CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles", "XmlContent", "xmlTypeSetting : " + xmlTypeSetting);
+                        data = xmlContent;
+                    }
+                    
+                    request.ContentLength = data.Length;
+                    CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles-XML", "No SP", "XML File Size : " + data.Length);
+
+                    string contentTypeSetting = ConfigurationManager.AppSettings["contentType"];
+
+                    if (contentTypeSetting == "0")
+                    {
+                        CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles-XML", "No SP", "0 - text/xml; encoding='utf-8'");
+                        request.ContentType = "text/xml; encoding='utf-8'";
+                    }
+
+                    if (contentTypeSetting == "1")
+                    {
+                        CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles-XML", "No SP", "1 - text/xml; encoding='UTF-8'");
+                        request.ContentType = "text/xml; encoding='UTF-8'";
+                    }
+
+                    if (contentTypeSetting == "2")
+                    {
+                        CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles-XML", "No SP", "2 - text/xml;");
+                        request.ContentType = "text/xml;";
+                    } 
+                }
+                
+                request.Headers.Add("Authorization", Convert.ToString("HCP ") + byte64_username + ":" + md5_password);
+
+                //Nlogger.Trace("Upload Files :  Lets call 'OverrideCertificateValidations' function ");
+                CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles : " + events, "No SP", "Upload Files :  Lets call 'OverrideCertificateValidations' function ");
+                OverrideCertificateValidations();
+
+                //Nlogger.Trace("Upload Files :  Url : " + urlUploadFile);
+                CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles : " + events, "No SP", "Upload Files :  Url : " + urlUploadFile);
+
+                int count = 0;
+                // Connect webrequest and send file to webrequest.
+                using (var requestStream = request.GetRequestStream())
+                {
+                    //Nlogger.Trace("Upload Files :  Count : " + count.ToString());
+                    CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles : " + events, "No SP", "Upload Files :  Count : " + count.ToString());
+                    requestStream.Write(data, 0, data.Length);
+                }
+                var response = (HttpWebResponse)request.GetResponse();
+
+                //Nlogger.Trace("Upload Files :  Response Content: " + response.StatusCode.ToString());
+                CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles : " + events, "No SP", "Upload Files :  Response Content: " + response.StatusCode.ToString());
+
+                //Nlogger.Trace("Upload Files : Response Code: " + response.StatusCode.ToString());
+                CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles : " + events, "No SP", "Upload Files : Response Code: " + response.StatusCode.ToString());
+
+                // Get response if file saved successfully or not
+                if (response.StatusCode == HttpStatusCode.OK)
+                {
+                    Nlogger.Trace("Upload Files : Response Status code is OK");
+                    CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles : " + events, "No SP", "Upload Files : Response Status code is OK");
+                    return "OK";
+                }
+                else
+                {
+                    Nlogger.Trace("Response Status code is not OK");
+                    CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles : " + events, "No SP", "Response Status code is not OK");
+                    return "Response Status code is not OK";
+                }
+            }
+            catch (Exception exception)
+            {
+                CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles : " + events, "HCP Exception","HCP Inner Exception: " + exception.InnerException.ToString());
+                CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles : " + events, "No SP", "HCP Message Exception: " + exception.Message);
+                return exception.Message;
+            }
+        }
+
+        public string UploadFilesATPTCT(HttpPostedFileBase file, string folderPath, string module, string isXmlFile)
+        {
+            try
+            {
+                string urlUploadFile = url + "/" + folderPath;
+                int fileSize = file.ContentLength;
+                byte[] data = null;
+
+                CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles - " + module, "No SP", "Upload Files : URLUploaded : " + urlUploadFile);
+                CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles : " + module, "No SP", "Upload Files : FileContentLength : " + fileSize.ToString());
+
+                // Convert httpPostedFile to byte array
+                Stream fileStreamXml = file.InputStream;
+                var mStreamer = new MemoryStream();
+                mStreamer.SetLength(fileStreamXml.Length);
+                fileStreamXml.Read(mStreamer.GetBuffer(), 0, (int)fileStreamXml.Length);
+                mStreamer.Seek(0, SeekOrigin.Begin);
+                data = mStreamer.GetBuffer();
+
+                // Username and Password encryption
+                string byte64_username = string.Empty;
+                string md5_password = string.Empty;
+                byte64_username = Get64Byte(userName);
+                using (MD5 md5Hash = MD5.Create())
+                {
+                    md5_password = GetMd5Hash(md5Hash, password);
+                }
+                CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles : " + module, "No SP", "Upload Files :byte64_username : " + byte64_username + "; md5_password : " + md5_password);
+
+                // Web request
+                HttpWebRequest request = (HttpWebRequest)WebRequest.Create(urlUploadFile);
+                request.Method = WebRequestMethods.Http.Put;
+                request.SendChunked = true;
+                request.ContentLength = data.Length;
+
+                // For xml files we have to write different logic
+                if (!string.IsNullOrEmpty(isXmlFile))
+                {
+                    request.ContentType = "text/xml;";
+                }
+                request.Headers.Add("Authorization", Convert.ToString("HCP ") + byte64_username + ":" + md5_password);
+
+                CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles : " + module, "No SP", "Upload Files :  Lets call 'OverrideCertificateValidations' function ");
+                OverrideCertificateValidations();
+                CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles : " + module, "No SP", "Upload Files :  Url : " + urlUploadFile);
+
+                // Connect webrequest and send file to webrequest.
+                using (var requestStream = request.GetRequestStream())
+                {
+                    requestStream.Write(data, 0, data.Length);
+                }
+
+                var response = (HttpWebResponse)request.GetResponse();
+                CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles : " + module, "No SP", "Upload Files :  Response Status Code: " + response.StatusCode.ToString());
+
+                // Get response if file saved successfully or not
+                if (response.StatusCode == HttpStatusCode.OK)
+                {
+                    CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles : " + module, "No SP", "Upload Files : Response Status code is OK");
+                    return "OK";
+                }
+                else
+                {
+                    CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles : " + module, "No SP", "Response Status code is not OK");
+                    return "Response Status code is not OK";
+                }
+            }
+            catch (Exception exception)
+            {
+                CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles : " + module, "HCP Exception", "HCP Inner Exception: " + exception.InnerException.ToString());
+                CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles : " + module, "No SP", "HCP Message Exception: " + exception.Message);
+                return exception.Message;
+            }
+        }
+
+        public string UploadFilesXML(HttpPostedFileBase file, string url)
+        {
+            CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles_XML", "No SP", "Upload Files");
+            HttpWebRequest httpWebRequest = null;//Declare an HTTP-specific implementation of the WebRequest class.
+            HttpWebResponse httpWebResponse = null;//Declare an HTTP-specific implementation of the WebResponse class
+
+            CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles_XML", "No SP", "Url : " + url);
+            //Creates an HttpWebRequest for the specified URL.
+            httpWebRequest = (HttpWebRequest)WebRequest.Create(url);
+
+            try
+            {
+                byte[] bytes = null;
+                CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles_XML", "No SP", "Before convert file to bytearray ");
+                bytes = ConverToBytes(file);
+
+                // Username and Password encryption
+                string byte64_username = string.Empty;
+                string md5_password = string.Empty;
+                CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles_XML", "No SP", "Upload Files :  Before Encryption ");
+                //Nlogger.Trace("Upload Files :  Before Encryption ");
+                byte64_username = Get64Byte(userName);
+
+                using (MD5 md5Hash = MD5.Create())
+                {
+                    md5_password = GetMd5Hash(md5Hash, password);
+                }
+                CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles_XML", "No SP", "Upload Files :  md5_password : " + md5_password);
+                CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles_XML", "No SP", "Upload Files :  byte64_username : " + byte64_username);
+                CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles_XML", "No SP", "Try to connect REST API : " + url);
+
+                httpWebRequest.SendChunked = true;
+                httpWebRequest.Headers.Add("Authorization", Convert.ToString("HCP ") + byte64_username + ":" + md5_password);
+
+                CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles_XML", "No SP", "Upload Files :  Lets call 'OverrideCertificateValidations' function ");
+                OverrideCertificateValidations();
+                CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles_XML", "No SP", "Upload Files :  Url : " + url);
+
+                //Set HttpWebRequest properties
+                httpWebRequest.Method = "PUT";
+                httpWebRequest.ContentLength = bytes.Length;
+                httpWebRequest.ContentType = "text/xml; encoding='utf-8'";
+
+                using (Stream requestStream = httpWebRequest.GetRequestStream())
+                {
+                    CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles_XML", "No SP", "Using RequestStream ");
+                    //Writes a sequence of bytes to the current stream 
+                    requestStream.Write(bytes, 0, bytes.Length);
+                    requestStream.Close();//Close stream
+                }
+
+                //Sends the HttpWebRequest, and waits for a response.
+                httpWebResponse = (HttpWebResponse)httpWebRequest.GetResponse();
+
+                if (httpWebResponse.StatusCode == HttpStatusCode.OK)
+                {
+                    //Get response stream into StreamReader
+                    CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles_XML", "No SP", "Upload XML Files : Response Status code is OK");
+                }
+                else
+                {
+                    CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFiles_XML", "No SP", "Upload XML Files : Response Status code NOT OK");
+                }
+                httpWebResponse.Close();//Close HttpWebResponse
+
+                return "OK";
+            }
+            catch (Exception exception)
+            {
+                CommonFunction.SaveExecutionLogger("HCPConnect", "UploadFilesXML", "No SP", "Error in UploadFiles: " + exception.Message);
+                return exception.Message;
+            }
+
+        }
+
+        public void OverrideCertificateValidations()
+        {
+            ServicePointManager.ServerCertificateValidationCallback = new RemoteCertificateValidationCallback(RemoteCertValidate);
+        }
+
+        private bool RemoteCertValidate(Object sender, X509Certificate cert, X509Chain chain,
+            System.Net.Security.SslPolicyErrors errors)
+        {
+            return true;
+        }
+
+        public bool VerifyMd5Hash(MD5 md5Hash, string input, string hash)
+        {
+            string hashOfInput = GetMd5Hash(md5Hash, input);
+            StringComparer comparer = StringComparer.OrdinalIgnoreCase;
+
+            if (0 == comparer.Compare(hashOfInput, hash))
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+
+        }
+
+        public string GetMd5Hash(MD5 md5Hash, string input)
+        {
+            Byte[] data = md5Hash.ComputeHash(Encoding.UTF8.GetBytes(input));
+
+            StringBuilder stringBuilder = new StringBuilder();
+            for (int i = 0; i < data.Length; i++)
+                stringBuilder.AppendFormat("{0:x2}", data[i]);
+
+            return stringBuilder.ToString();
+        }
+
+        public string Get64Byte(string username)
+        {
+            string authInfo = string.Empty;
+
+            authInfo = Convert.ToBase64String(Encoding.Default.GetBytes(username));
+
+            return authInfo;
+        }
+
+
+        public byte[] ConverToBytes(HttpPostedFileBase file)
+        {
+            var length = file.InputStream.Length; //Length: 103050706
+            byte[] fileData = null;
+            using (var binaryReader = new BinaryReader(file.InputStream))
+            {
+                fileData = binaryReader.ReadBytes(file.ContentLength);
+            }
+            return fileData;
+        }
+
+    }
+}
