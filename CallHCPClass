@@ -1,0 +1,19 @@
+//Call HCP to store document
+string IsHCP = ConfigurationManager.AppSettings["HCP"];
+if (IsHCP != null && IsHCP.ToUpper() == "YES") // HCP or Directory
+{
+    //Convert byte[] to httpostedFilebase
+    HttpPostedFileBase documentFile = (HttpPostedFileBase)new MemoryPostedFile(file.Document);
+    
+    // CALL HCP class
+    HCPConnect hcpConnect = new HCPConnect();
+    if (ext == "xml")
+    {
+        string xml = "xml";
+        hcpConnect.UploadFiles(documentFile, dbfilepath, "", xml, file.Document, "Events");
+    }
+    else
+    {
+        hcpConnect.UploadFiles(documentFile, dbfilepath, "", "", file.Document, "Events");
+    }
+}
